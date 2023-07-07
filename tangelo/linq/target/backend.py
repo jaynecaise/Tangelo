@@ -32,6 +32,7 @@ contained in the static method backend_info defined by each subclass target.
 
 import abc
 import math
+import time
 from collections import Counter
 
 import numpy as np
@@ -42,6 +43,12 @@ from tangelo.linq import Gate, Circuit
 from tangelo.linq.helpers.circuits.measurement_basis import measurement_basis_gates
 from tangelo.toolboxes.operators import QubitOperator
 
+
+simulation_times = []
+
+def clear_simulation_times():
+    global simulation_times
+    simulation_times = []
 
 def get_expectation_value_from_frequencies_oneterm(term, frequencies):
     """Return the expectation value of a single-term qubit-operator, given
@@ -251,6 +258,7 @@ class Backend(abc.ABC):
             numpy.array: The statevector, if available for the target backend
                 and requested by the user (if not, set to None).
         """
+        global simulation_times
         n_meas = source_circuit.counts.get("MEASURE", 0)
 
         if desired_meas_result is not None:
@@ -287,19 +295,26 @@ class Backend(abc.ABC):
             # TODO: refactor to break a circular import. May involve by relocating get_xxx_oneterm functions
             from tangelo.toolboxes.post_processing.post_selection import split_frequency_dict
 
+            t0 = time.time()
             (all_frequencies, statevector) = self.simulate_circuit(source_circuit,
                                                                    return_statevector=return_statevector,
                                                                    initial_statevector=initial_statevector,
                                                                    desired_meas_result=desired_meas_result,
                                                                    save_mid_circuit_meas=save_mid_circuit_meas)
+            tf = time.time()
             self.mid_circuit_meas_freqs, frequencies = split_frequency_dict(all_frequencies,
                                                                             list(range(n_meas)),
                                                                             desired_measurement=desired_meas_result)
+            simulation_times.append(tf-t0)
             return (frequencies, statevector)
 
-        return self.simulate_circuit(source_circuit,
+        t0 = time.time()
+        res = self.simulate_circuit(source_circuit,
                                      return_statevector=return_statevector,
                                      initial_statevector=initial_statevector)
+        tf = time.time()
+        simulation_times.append(tf-t0)
+        return res
 
     def get_expectation_value(self, qubit_operator, state_prep_circuit, initial_statevector=None, desired_meas_result=None):
         r"""Take as input a qubit operator H and a quantum circuit preparing a
